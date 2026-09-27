@@ -1,69 +1,232 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
 
 export default function Home() {
+  const [topic, setTopic] = useState("");
+  const [research, setResearch] = useState(null);
+  const [streamedText, setStreamedText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function researchTopic() {
+    if (!topic.trim()) {
+      setError("Please enter a research topic.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setResearch(null);
+    setStreamedText("");
+
+    try {
+      const response = await fetch("/api/research", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          topic,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to generate research.");
+      }
+
+      if (!response.body) {
+        throw new Error("No response stream received.");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      let result = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+
+        if (done) break;
+
+        const chunk = decoder.decode(value, {
+          stream: true,
+        });
+
+        console.log("STREAM CHUNK:", chunk);
+
+        result += chunk;
+
+        setStreamedText((previous) => previous + chunk);
+      }
+
+      console.log("FINAL STREAM:", result);
+    } catch (error) {
+      console.error(error);
+      setError(error.message || "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.js
-            </code>{" "}
-            file.
+    <main className="min-h-screen bg-gray-50 px-6 py-12">
+      <div className="mx-auto max-w-4xl">
+        {/* Header */}
+        <div>
+          <h1 className="text-4xl font-bold">
+            ResearchFlow AI
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+
+          <p className="mt-2 text-gray-600">
+            AI-powered research and intelligence platform
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+
+        {/* Research Input */}
+        <div className="mt-8 rounded-xl bg-white p-6 shadow">
+          <label className="font-medium">
+            Research Topic
+          </label>
+
+          <input
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !loading) {
+                researchTopic();
+              }
+            }}
+            placeholder="Enter a research topic..."
+            className="mt-2 w-full rounded-lg border p-3 outline-none focus:border-black"
+          />
+
+          <button
+            onClick={researchTopic}
+            disabled={loading}
+            className="mt-4 rounded-lg bg-black px-5 py-3 text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            {loading ? "Researching..." : "Start Research"}
+          </button>
+
+          {error && (
+            <p className="mt-4 rounded-lg bg-red-50 p-3 text-red-600">
+              {error}
+            </p>
+          )}
         </div>
-      </main>
-    </div>
+
+        {/* Streaming Response */}
+        {streamedText && (
+          <section className="mt-8 rounded-xl bg-white p-6 shadow">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold">
+                AI Research
+              </h2>
+
+              {loading && (
+                <span className="text-sm text-gray-500">
+                  Generating...
+                </span>
+              )}
+            </div>
+
+            <pre className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-gray-700">
+              {streamedText}
+            </pre>
+          </section>
+        )}
+
+        {/* Final Structured Research */}
+        {research && (
+          <div className="mt-8 space-y-6">
+            {/* Title */}
+            <section className="rounded-xl bg-white p-6 shadow">
+              <h2 className="text-2xl font-bold">
+                {research.title}
+              </h2>
+            </section>
+
+            {/* Overview */}
+            <section className="rounded-xl bg-white p-6 shadow">
+              <h2 className="text-xl font-semibold">
+                Overview
+              </h2>
+
+              <p className="mt-3 text-gray-700">
+                {research.overview}
+              </p>
+            </section>
+
+            {/* Why It Matters */}
+            <section className="rounded-xl bg-white p-6 shadow">
+              <h2 className="text-xl font-semibold">
+                Why It Matters
+              </h2>
+
+              <p className="mt-3 text-gray-700">
+                {research.whyItMatters}
+              </p>
+            </section>
+
+            {/* Developments */}
+            <section className="rounded-xl bg-white p-6 shadow">
+              <h2 className="text-xl font-semibold">
+                Important Developments
+              </h2>
+
+              <ul className="mt-3 list-disc space-y-2 pl-6 text-gray-700">
+                {research.developments.map(
+                  (development, index) => (
+                    <li key={index}>
+                      {development}
+                    </li>
+                  )
+                )}
+              </ul>
+            </section>
+
+            {/* Challenges */}
+            <section className="rounded-xl bg-white p-6 shadow">
+              <h2 className="text-xl font-semibold">
+                Potential Challenges
+              </h2>
+
+              <ul className="mt-3 list-disc space-y-2 pl-6 text-gray-700">
+                {research.challenges.map(
+                  (challenge, index) => (
+                    <li key={index}>
+                      {challenge}
+                    </li>
+                  )
+                )}
+              </ul>
+            </section>
+
+            {/* Sources */}
+            <section className="rounded-xl bg-white p-6 shadow">
+              <h2 className="text-xl font-semibold">
+                Sources
+              </h2>
+
+              <ul className="mt-3 space-y-3">
+                {research.sources.map((source, index) => (
+                  <li key={index}>
+                    <a
+                      href={source.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline"
+                    >
+                      {source.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </div>
+        )}
+      </div>
+    </main>
   );
 }
